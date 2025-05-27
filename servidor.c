@@ -10,7 +10,8 @@
 #include <pthread.h>
 
 
-//Estructuras
+//************************************************************************************************
+//ESTRUCTURAS
 typedef struct{
 	char nombre[20];
 	int socket;
@@ -32,12 +33,8 @@ typedef struct{
 ListaConectados milistaconectados;
 Partida partidas[500];
 int numPartidas;
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-int contador= 0;
-int resultado;
-int jugador;
-int consulta;
-int puerto = 9050;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; //Estructura para acceso excluyente
+int puerto = 9010;
 
 //************************************************************************************************
 //Funciones del servidor
@@ -57,34 +54,6 @@ void Loguearse(char nombre[20],char contrasenya[20],MYSQL *conn, int *sock_conn,
 	}
 	printf("Correcto %s\n",respuesta);
 	write (sock_conn,respuesta, strlen(respuesta));
-}
-
-
-void ConsultarID(char *usuario, MYSQL *conn, char *respuesta) { //mira que no edvuelva la consulta sino solo la id
-	char query[100];
-	sprintf(query, "SELECT idj FROM jugadores WHERE usuario = '%s'", usuario);
-	memset(respuesta, 0, 100);
-	
-	if (mysql_query(conn, query)) {
-		fprintf(stderr, "%s\n", mysql_error(conn));
-		strcpy(respuesta, "Error en la consulta");
-		return;
-	}
-	MYSQL_RES *result = mysql_store_result(conn);
-	if (result == NULL) {
-		fprintf(stderr, "%s\n", mysql_error(conn));
-		strcpy(respuesta, "Error al obtener resultados");
-		return;
-	}
-	MYSQL_ROW row = mysql_fetch_row(result);
-	if (row) {
-		sprintf(respuesta, "3/%s/", row[0]); 
-		
-	} else {
-		strcpy(respuesta, "Usuario no encontrado");
-	}
-	
-	mysql_free_result(result);
 }
 
 
@@ -115,68 +84,7 @@ int BuscarID(char nombre[20],char contrasenya[20],MYSQL *conn){
 }
 
 
-void ObtenerPartidasJugadas(char *usuario, MYSQL *conn, char *respuesta) {
-	char query[512];
-	snprintf(query, sizeof(query),
-			 "SELECT COUNT(*) FROM participacion p "
-			 "JOIN jugadores j ON p.idJugadores = j.idj "
-			 "WHERE j.usuario = '%s'", usuario);
-	
-	memset(respuesta, 0, 100);
-	
-	if (mysql_query(conn, query)) {
-		snprintf(respuesta, 100, "0/ErrorDB/%s", mysql_error(conn));
-	return;
-}
-	
-	MYSQL_RES *result = mysql_store_result(conn);
-	if (!result) {
-		snprintf(respuesta, 100, "0/ErrorResult/");
-		return;
-	}
-	MYSQL_ROW row = mysql_fetch_row(result);
-	snprintf(respuesta, 100, "4/%s/", row ? row[0] : "0");
-	mysql_free_result(result);
-}
-
-void obtener_partida_mas_corta(const char *usuario, MYSQL *conn, char *respuesta) {
-	char query[512];
-	// Consulta optimizada que convierte duración a número para comparación
-	snprintf(query, sizeof(query),
-			 "SELECT p.idp, p.duracion, p.fecha, p.ganador "
-			 "FROM partidas p "
-			 "JOIN participacion part ON p.idp = part.idPart "
-			 "JOIN jugadores j ON part.idJugadores = j.idj "
-			 "WHERE j.usuario = '%s' "
-			 "ORDER BY CAST(p.duracion AS UNSIGNED) ASC "
-			 "LIMIT 1", usuario);
-	
-	memset(respuesta, 0, 200);
-	
-	if (mysql_query(conn, query)) {
-		snprintf(respuesta, 200, "0/ErrorDB/%s", mysql_error(conn));
-		return;
-	}
-	MYSQL_RES *result = mysql_store_result(conn);
-	if (!result) {
-		snprintf(respuesta, 200, "0/ErrorResult/");
-		return;
-	}
-	MYSQL_ROW row = mysql_fetch_row(result);
-	if (row) {
-		// Formato: 5/[id_partida]/[duracion]/[fecha]/[ganador]/
-		snprintf(respuesta, 200, "5/%s/%s/%s/%s/", 
-				 row[0], row[1], row[2], row[3], row[4]);
-		
-	} else {
-		snprintf(respuesta, 200, "5/0/Sin partidas//");
-	}
-	mysql_free_result(result);
-}
-		
-		
-	
-	int AnadirConectado(char nom[20], int socket, ListaConectados *l){
+int AnadirConectado(char nom[20], int socket, ListaConectados *l){
 	//Retorna -1 en caso de que la lista de conectados este llena, retorna 0 si todo est� correcto
 	if(l->num == 100){
 		return -1;
@@ -427,18 +335,17 @@ void EnviarMensajeGlobal(ListaConectados *l, char nombre[20],char mensaje[500]){
 }
 
 //Chat local(chat de partidas)
-/*void EnviarMensajePartida(Partida partidas[500],int partida, char nombre[20],char mensaje[500]){*/
-/*	char respuesta[800];*/
-/*	sprintf(respuesta,"9/2/%s/%s/",nombre,mensaje);*/
-/*	printf("%s",respuesta);*/
-/*	for(int i=0;i<partidas[partida].numparticipantes;i++){*/
-/*		write(partidas[partida].conectados[i].socket,respuesta,sizeof(respuesta));*/
-/*	}*/
-/*}*/
+void EnviarMensajePartida(Partida partidas[500],int partida, char nombre[20],char mensaje[500]){
+	char respuesta[800];
+	sprintf(respuesta,"9/2/%s/%s/",nombre,mensaje);
+	printf("%s",respuesta);
+	for(int i=0;i<partidas[partida].numparticipantes;i++){
+		write(partidas[partida].conectados[i].socket,respuesta,sizeof(respuesta));
+	}
+}
 
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//--------------------------------------------------------------------------------------------------
 
 
 int DameSocket(ListaConectados *l, char nom[20]){
@@ -460,7 +367,7 @@ int DameSocket(ListaConectados *l, char nom[20]){
 	}
 }	
 
-int DamePosicion(int *socket, ListaConectados *l){//retorna la posicion de un usuario mediante su socket, retorna -1 en caso de no encontrarse
+int DamePosicion(int *socket, ListaConectados *l){//devuelve la posicion de un usuario mediante su socket, devuelve -1 en caso de no encontrarse
 	int i =0;
 	int encontrado =0;
 	while((!encontrado) && (i != l-> num)){
@@ -543,7 +450,7 @@ void *AtenderCliente(void * socket)
 		exit (1);
 	}
 	//inicializar la conexion
-	conn = mysql_real_connect (conn, "localhost","root", "mysql", "BBDDJuego",0, NULL, 0);
+	conn = mysql_real_connect (conn, "localhost","root", "mysql", "BBDDjuego",0, NULL, 0);
 	if (conn==NULL)
 	{
 		printf ("Error al inicializar la conexion: %u %s\n",
@@ -567,10 +474,6 @@ void *AtenderCliente(void * socket)
 			//Recibir la peticion
 			char *p = strtok( peticion, "/");
 			int codigo =  atoi (p);
-			char usuario[25];
-			
-			char respt[100];
-			
 			// Ya tenemos el codigo de la peticion
 			printf ("Codigo: %d\n", codigo);
 			printf("Mensaje enviado por socket: %d\n",sock_conn);
@@ -580,7 +483,6 @@ void *AtenderCliente(void * socket)
 				char *p = strtok( peticion, "/");
 				int partida =  atoi (p);
 				
-			
 				if(Usuario[0]!='\0'){
 					pthread_mutex_lock(&mutex);
 					EliminarDePartida(partidas,nombre,partida);
@@ -643,65 +545,16 @@ void *AtenderCliente(void * socket)
 				pthread_mutex_unlock(&mutex);	
 					
 			}
-			else if (codigo ==3){ 
-			
-				p = strtok(NULL, "/");
-				char usuario[20];
-				strcpy(usuario, p);
+			else if (codigo ==3){ // consulta 1: dame el nombre del jugador con la maxima puntuacion y su puntuacion
 				
-				printf("Consultando ID para: %s\n", usuario);
-				
-				char respuesta[100];
-				pthread_mutex_lock(&mutex);
-				ConsultarID(usuario, conn, respuesta);
-				pthread_mutex_unlock(&mutex);
-				
-				printf("Enviando respuesta: %s\n", respuesta);
-				
-				// Asegurar envío completo con terminador nulo
-				write(sock_conn, respuesta, strlen(respuesta) + 1);
 			}
 				
-			
-				
 			else if (codigo ==4){ // consulta 2: dame la duracion de la partida mas larga que jugo x'
-				p = strtok(NULL, "/");
-				if (!p) {
-					snprintf(respuesta, 100, "0/FormatoInvalido/");
-					write(sock_conn, respuesta, strlen(respuesta)+1);
-					return;
-				}
-				char usuario[50];
-				strncpy(usuario, p, sizeof(usuario)-1);
-				usuario[sizeof(usuario)-1] = '\0';
-				
-				printf("Buscando partidas para: %s\n", usuario); // Debug
-				pthread_mutex_lock(&mutex);
-				ObtenerPartidasJugadas(usuario, conn, respuesta);
-				pthread_mutex_unlock(&mutex);
-				
-				printf("Enviando respuesta: %s\n", respuesta); // Debug
-				write(sock_conn, respuesta, strlen(respuesta)+1);
 				
 			}
 			
 			else if (codigo ==5){ // consulta 3: dime si existe un jugador con el nombre de usuario x
-				p = strtok(NULL, "/");
-				if (!p) {
-					snprintf(respuesta, 200, "0/FormatoInvalido/");
-					write(sock_conn, respuesta, strlen(respuesta)+1);
-					return;
-				}	
-				char usuario[50];
-				strncpy(usuario, p, sizeof(usuario)-1);
-				usuario[sizeof(usuario)-1] = '\0';
-				printf("Buscando partida más corta para: %s\n", usuario);
-				pthread_mutex_lock(&mutex);
-				obtener_partida_mas_corta(usuario, conn, respuesta);
-				pthread_mutex_unlock(&mutex);
 				
-				printf("Enviando respuesta: %s\n", respuesta);
-				write(sock_conn, respuesta, strlen(respuesta)+1);
 			}
 			else if(codigo == 6){//Protocolo de invitacion
 				p = strtok(NULL, "/");
@@ -775,30 +628,30 @@ void *AtenderCliente(void * socket)
 				EnviarMensajeGlobal(&milistaconectados,nombre,mensaje);
 				pthread_mutex_unlock(&mutex);
 			}
-			//else if(codigo==9){//Chat Local
-				//p = strtok(NULL, "/");
-/*				int partida = atoi(p);*/
+			else if(codigo==9){//Chat Local
+				p = strtok(NULL, "/");
+				int partida = atoi(p);
 				
-/*				p = strtok(NULL,"/");*/
-/*				char nombre[20];*/
-/*				strcpy(nombre,p);*/
+				p = strtok(NULL,"/");
+				char nombre[20];
+				strcpy(nombre,p);
 				
-/*				p = strtok(NULL,"/");*/
-/*				char mensaje[500];*/
-/*				strcpy(mensaje,p);*/
+				p = strtok(NULL,"/");
+				char mensaje[500];
+				strcpy(mensaje,p);
 				
-/*				if(strcmp(mensaje,"T")==0){*/
-/*					char resp[20];*/
-/*					strcpy(resp,"11/1");*/
-/*					write(partidas[partida].conectados[partidas[partida].turno].socket,resp,sizeof(resp));*/
-/*				}*/
-/*				else{*/
-/*					pthread_mutex_lock(&mutex);*/
-/*					EnviarMensajePartida(partidas,partida,nombre,mensaje);	*/
-/*					pthread_mutex_unlock(&mutex);*/
-				//}
+				if(strcmp(mensaje,"T")==0){
+					char resp[20];
+					strcpy(resp,"11/1");
+					write(partidas[partida].conectados[partidas[partida].turno].socket,resp,sizeof(resp));
+				}
+				else{
+					pthread_mutex_lock(&mutex);
+					EnviarMensajePartida(partidas,partida,nombre,mensaje);	
+					pthread_mutex_unlock(&mutex);
+				}
 				
-			//}
+			}
 			//Codigos para el juego
 			else if(codigo ==10){//Empezar juego
 				p = strtok(NULL, "/");
