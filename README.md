@@ -6,4 +6,4 @@ Video Versión 4: https://youtu.be/VM-08pEoFTg
 
 Video Versión 5: https://youtu.be/_dVwuqaghdo
 
-Video Versión final (Entrega #13.1): 
+Video Versión final (Entrega #13.1): https://youtu.be/_dVwuqaghdo
